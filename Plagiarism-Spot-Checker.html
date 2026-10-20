@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plagiarism Spot-Checker — by Dr. Asif Ahmad</title>
+<style>
+  :root{
+    --green:#0B4F3A; --emerald:#087F66; --gold:#C9A227;
+    --ink:#1F2937; --muted:#6B7280; --bg:#F7F9F7; --card:#FFFFFF;
+    --ok:#15803d; --flag:#b91c1c; --line:#E5E7EB;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+  header{background:linear-gradient(135deg,var(--green),var(--emerald));color:#fff;padding:26px 20px;text-align:center}
+  header h1{margin:0 0 6px;font-size:1.5rem}
+  header p{margin:0;opacity:.9;font-size:.9rem}
+  main{max-width:960px;margin:0 auto;padding:20px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+  .card h2{margin:0 0 12px;font-size:1.05rem;color:var(--green)}
+  textarea{width:100%;min-height:170px;border:1px solid var(--line);border-radius:8px;padding:12px;font-size:.95rem;resize:vertical}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}
+  label{font-size:.85rem;color:var(--muted)}
+  select,input[type=number]{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:.9rem}
+  button{border:0;border-radius:8px;padding:10px 18px;font-size:.92rem;cursor:pointer;font-weight:600}
+  .btn-go{background:var(--emerald);color:#fff}
+  .btn-go:hover{background:var(--green)}
+  .btn-ghost{background:#fff;color:var(--green);border:1px solid var(--emerald)}
+  .btn-search{background:#1a73e8;color:#fff;padding:7px 12px;font-size:.82rem}
+  .btn-bing{background:#0f7a0f;color:#fff;padding:7px 12px;font-size:.82rem}
+  .btn-clear{background:#e8f5e9;color:var(--ok);padding:7px 12px;font-size:.82rem}
+  .btn-flag{background:#fdecea;color:var(--flag);padding:7px 12px;font-size:.82rem}
+  .btn-report{background:var(--gold);color:#3d2f00}
+  .progress{height:12px;background:var(--line);border-radius:8px;overflow:hidden;margin:8px 0}
+  .progress>div{height:100%;background:var(--emerald);width:0%;transition:width .3s}
+  .stats{display:flex;gap:16px;flex-wrap:wrap;font-size:.88rem;color:var(--muted)}
+  .stats b{color:var(--ink)}
+  .chunk{border:1px solid var(--line);border-radius:10px;padding:12px;margin:10px 0;background:#fff}
+  .chunk.checked-clear{border-left:5px solid var(--ok);background:#f6fdf7}
+  .chunk.checked-flag{border-left:5px solid var(--flag);background:#fff7f7}
+  .chunk p{margin:0 0 8px;font-size:.92rem;line-height:1.5}
+  .chunk .meta{font-size:.75rem;color:var(--muted);margin-bottom:8px}
+  .chunk .actions{display:flex;gap:8px;flex-wrap:wrap}
+  .src{width:100%;margin-top:8px;border:1px solid var(--line);border-radius:8px;padding:8px;font-size:.85rem;display:none}
+  .hint{font-size:.82rem;color:var(--muted);background:#fffbe8;border:1px solid #f0e2a8;border-radius:8px;padding:10px 12px;margin-top:12px}
+  footer{text-align:center;color:var(--muted);font-size:.8rem;padding:18px}
+  #reportOut{white-space:pre-wrap;font-family:Consolas,monospace;font-size:.82rem;background:#0f172a;color:#e2e8f0;border-radius:10px;padding:14px;max-height:380px;overflow:auto;display:none}
+  @media print{ header,.no-print{display:none} #reportOut{display:block!important;max-height:none;background:#fff;color:#000} }
+</style>
+</head>
+<body>
+<header>
+  <h1>🔍 Plagiarism Spot-Checker</h1>
+  <p>Web-search-based originality spot check &nbsp;•&nbsp; Developed by Prof. Dr. Asif Ahmad</p>
+</header>
+<main>
+
+  <div class="card">
+    <h2>1 &nbsp;·&nbsp; Paste your text</h2>
+    <textarea id="input" placeholder="Paste the text you want to check here (e.g. an abstract, a paragraph, a section)…"></textarea>
+    <div class="row">
+      <label>…or upload a .txt file:</label>
+      <input type="file" id="fileUp" accept=".txt">
+    </div>
+    <div class="row">
+      <label>Split into:</label>
+      <select id="mode">
+        <option value="sentences">Sentences</option>
+        <option value="phrases">10-word phrases</option>
+      </select>
+      <label>Min words per check:</label>
+      <input type="number" id="minWords" value="8" min="4" max="30" style="width:70px">
+      <button class="btn-go" id="analyzeBtn">Analyze text</button>
+      <button class="btn-ghost" id="resetBtn">Reset</button>
+    </div>
+    <div class="hint">💡 <b>How it works:</b> your text is split into checkable chunks. Click <b>Google</b> or <b>Bing</b> on any chunk to run an <i>exact-phrase</i> web search for it. If the search returns the same wording on another page, mark it <b>🚩 Flag</b> (paste the matching URL); otherwise mark it <b>✅ Clear</b>. Nothing is uploaded anywhere — everything runs in your browser.</div>
+  </div>
+
+  <div class="card" id="progressCard" style="display:none">
+    <h2>2 &nbsp;·&nbsp; Check each passage</h2>
+    <div class="stats">
+      <span>Total chunks: <b id="stTotal">0</b></span>
+      <span>Checked: <b id="stChecked">0</b></span>
+      <span style="color:var(--ok)">Clear: <b id="stClear">0</b></span>
+      <span style="color:var(--flag)">Flagged: <b id="stFlag">0</b></span>
+    </div>
+    <div class="progress"><div id="bar"></div></div>
+    <div id="chunks"></div>
+  </div>
+
+  <div class="card no-print" id="reportCard" style="display:none">
+    <h2>3 &nbsp;·&nbsp; Report</h2>
+    <div class="row">
+      <button class="btn-report" id="reportBtn">Generate report</button>
+      <button class="btn-ghost" id="dlBtn">Download .txt</button>
+      <button class="btn-ghost" id="printBtn">Print</button>
+      <button class="btn-ghost" id="copyBtn">Copy to clipboard</button>
+    </div>
+    <div id="reportOut" style="margin-top:12px"></div>
+  </div>
+
+</main>
+<footer>Plagiarism Spot-Checker &nbsp;•&nbsp; Developed by Prof. Dr. Asif Ahmad &nbsp;•&nbsp; v1.0 — runs fully offline; web searches open in your browser</footer>
+
+<script>
+(function(){
+  "use strict";
+  var chunks = []; // {text, words, status: 'todo'|'clear'|'flag', src}
+
+  function el(id){ return document.getElementById(id); }
+
+  function wordsOf(s){ return s.trim().split(/\s+/).filter(Boolean); }
+
+  function splitSentences(text){
+    // normalize whitespace, protect common abbreviations
+    var t = text.replace(/\s+/g,' ').trim();
+    var abbr = { "e.g.":"EGX", "i.e.":"IEX", "etc.":"ETCX", "vs.":"VSX", "Dr.":"DRX", "Prof.":"PROFX", "Mr.":"MRX", "Mrs.":"MRSX", "Ph.D.":"PHDX" };
+    Object.keys(abbr).forEach(function(k){ t = t.split(k).join(abbr[k]); });
+    var raw = t.match(/[^.!?]+[.!?]+["']?|\S[^.!?]+$/g) || [];
+    var rev = {}; Object.keys(abbr).forEach(function(k){ rev[abbr[k]] = k; });
+    return raw.map(function(s){
+      Object.keys(rev).forEach(function(k){ s = s.split(k).join(rev[k]); });
+      return s.trim();
+    }).filter(Boolean);
+  }
+
+  function splitPhrases(text, n){
+    var w = wordsOf(text), out = [];
+    for(var i=0;i<w.length;i+=n){ out.push(w.slice(i,i+n).join(' ')); }
+    return out;
+  }
+
+  function analyze(){
+    var text = el('input').value.trim();
+    if(!text){ alert('Please paste some text first.'); return; }
+    var mode = el('mode').value, minW = parseInt(el('minWords').value,10)||8;
+    var parts = (mode==='sentences') ? splitSentences(text) : splitPhrases(text,10);
+    chunks = parts.map(function(p){
+      return { text:p, words:wordsOf(p).length, status:'todo', src:'' };
+    }).filter(function(c){ return c.words >= minW; });
+    if(!chunks.length){ alert('No chunks reached the minimum word count. Lower it or add more text.'); return; }
+    render();
+    el('progressCard').style.display='block';
+    el('reportCard').style.display='block';
+    el('reportOut').style.display='none';
+    el('progressCard').scrollIntoView({behavior:'smooth'});
+  }
+
+  function render(){
+    var box = el('chunks'); box.innerHTML='';
+    chunks.forEach(function(c,i){
+      var d = document.createElement('div');
+      d.className = 'chunk' + (c.status==='clear' ? ' checked-clear' : c.status==='flag' ? ' checked-flag' : '');
+      var p = document.createElement('p'); p.textContent = '\u201C'+c.text+'\u201D'; d.appendChild(p);
+      var m = document.createElement('div'); m.className='meta';
+      m.textContent = 'Chunk '+(i+1)+' of '+chunks.length+' · '+c.words+' words · '+
+        (c.status==='todo'?'not checked yet':c.status==='clear'?'marked CLEAR':'marked FLAGGED');
+      d.appendChild(m);
+      var a = document.createElement('div'); a.className='actions';
+      var g = document.createElement('button'); g.className='btn-search'; g.textContent='🔍 Google';
+      g.onclick=function(){ openSearch('google',c.text); };
+      var b = document.createElement('button'); b.className='btn-bing'; b.textContent='🔍 Bing';
+      b.onclick=function(){ openSearch('bing',c.text); };
+      var ok = document.createElement('button'); ok.className='btn-clear'; ok.textContent='✅ Clear';
+      ok.onclick=function(){ c.status='clear'; c.src=''; render(); };
+      var fl = document.createElement('button'); fl.className='btn-flag'; fl.textContent='🚩 Flag match';
+      fl.onclick=function(){ c.status='flag'; render(); var inp=document.getElementById('src-'+i); if(inp){inp.style.display='block'; inp.focus();} };
+      a.appendChild(g); a.appendChild(b); a.appendChild(ok); a.appendChild(fl);
+      d.appendChild(a);
+      var src = document.createElement('input');
+      src.className='src'; src.id='src-'+i; src.placeholder='Paste the matching page URL here (optional)…';
+      src.value=c.src||'';
+      src.oninput=function(){ c.src=this.value; };
+      if(c.status==='flag'){ src.style.display='block'; }
+      d.appendChild(src);
+      box.appendChild(d);
+    });
+    updateStats();
+  }
+
+  function openSearch(engine, phrase){
+    var q = encodeURIComponent('"'+phrase+'"');
+    var url = engine==='google'
+      ? 'https://www.google.com/search?q='+q
+      : 'https://www.bing.com/search?q='+q;
+    window.open(url,'_blank','noopener');
+  }
+
+  function updateStats(){
+    var done=0,clr=0,flg=0;
+    chunks.forEach(function(c){ if(c.status!=='todo')done++; if(c.status==='clear')clr++; if(c.status==='flag')flg++; });
+    el('stTotal').textContent=chunks.length;
+    el('stChecked').textContent=done;
+    el('stClear').textContent=clr;
+    el('stFlag').textContent=flg;
+    el('bar').style.width=(chunks.length?Math.round(done/chunks.length*100):0)+'%';
+  }
+
+  function reportText(){
+    var done=0,clr=0,flg=0,flagged=[];
+    chunks.forEach(function(c,i){
+      if(c.status!=='todo')done++;
+      if(c.status==='clear')clr++;
+      if(c.status==='flag'){flg++; flagged.push({i:i+1,c:c});}
+    });
+    var L=[];
+    L.push('PLAGIARISM SPOT-CHECK REPORT');
+    L.push('Generated: '+new Date().toLocaleString());
+    L.push('Tool: Plagiarism Spot-Checker v1.0 (web-search-based, by Prof. Dr. Asif Ahmad)');
+    L.push('');
+    L.push('Total chunks : '+chunks.length);
+    L.push('Checked      : '+done);
+    L.push('Clear        : '+clr);
+    L.push('Flagged      : '+flg);
+    L.push('');
+    if(flagged.length){
+      L.push('FLAGGED PASSAGES (review and rewrite in your own words):');
+      flagged.forEach(function(f){
+        L.push('');
+        L.push(f.i+'. "'+f.c.text+'"');
+        L.push('   Matching source: '+(f.c.src||'(URL not recorded)'));
+      });
+    } else if(done===chunks.length){
+      L.push('RESULT: No matches flagged. All checked passages appear original.');
+    } else {
+      L.push('NOTE: '+(chunks.length-done)+' chunk(s) still unchecked.');
+    }
+    L.push('');
+    L.push('Disclaimer: web-search spot checks catch verbatim copies; they do not replace');
+    L.push('institutional originality screening (e.g. Turnitin/iThenticate).');
+    return L.join('\n');
+  }
+
+  el('analyzeBtn').onclick=analyze;
+  el('resetBtn').onclick=function(){
+    if(!confirm('Clear the text and all results?'))return;
+    el('input').value=''; chunks=[]; el('chunks').innerHTML='';
+    el('progressCard').style.display='none'; el('reportCard').style.display='none';
+    el('reportOut').style.display='none';
+  };
+  el('fileUp').onchange=function(e){
+    var f=e.target.files[0]; if(!f)return;
+    var r=new FileReader();
+    r.onload=function(){ el('input').value=r.result; };
+    r.readAsText(f);
+  };
+  el('reportBtn').onclick=function(){
+    var t=reportText(), out=el('reportOut');
+    out.textContent=t; out.style.display='block';
+    out.scrollIntoView({behavior:'smooth'});
+  };
+  el('dlBtn').onclick=function(){
+    var blob=new Blob([reportText()],{type:'text/plain'});
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download='plagiarism-spotcheck-report.txt';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){URL.revokeObjectURL(a.href); a.remove();},500);
+  };
+  el('printBtn').onclick=function(){ el('reportBtn').click(); setTimeout(function(){window.print();},300); };
+  el('copyBtn').onclick=function(){
+    var t=reportText();
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(t).then(function(){alert('Report copied to clipboard.');});
+    } else { alert('Clipboard not available in this browser. Use Download instead.'); }
+  };
+})();
+</script>
+</body>
+</html>
